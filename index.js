@@ -1,140 +1,137 @@
-import React , {useState , useEffect} from 'react';
+import React, { useState , useCallback  , useEffect} from 'react';
+import  {Container , Form , SubmitButton , List , DeleteButton  } from './styles';
+import {FaGithub , FaPlus , FaSpinner, FaBars , FaTrash} from 'react-icons/fa';
 import api from '../../services/api';
-import {Container , Owner , Loading , BackButton,IssuesList , PageActions , FilterList } from './styles';
-import { FaArrowLeft } from 'react-icons/fa';
+import {Link} from 'react-router-dom';
 
-export default function Repositorio({match}) {
+export default function Main() {
+  const [newRepo , setNewRepo]  = useState('');
+  const [repositorios , setRepositorios]  = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert ] = useState(null);
 
-  const [ repositorio, setRepositorio] = useState({});
-  const [issues , setIssues ] = useState([]);
-  const [loading , setLoading] = useState(true);
-  const [page,setPage] = useState(1);
-  const [filters, setFilters] = useState([
-    { state: 'all', label:'Todas' , active:true},
-    { state: 'open', label:'Abertas' , active:false},
-    { state: 'closed', label:'Fechadas' , active:false},
-  ]);
-  const[filterIndex , setFilterIndex] = useState(0);
-  
-useEffect(()=>{
+  //DisUpdate
+  //Buscar
+  useEffect(()=>{
+    const repoStorage = localStorage.getItem('repos');
+    if(repoStorage){
+      setRepositorios(JSON.parse(repoStorage));
+    }
+  },[]);
 
-   async  function load(){
-      const nomeRepo = decodeURIComponent(match.params.repositorio);
-
-      const [ repositorioData , issuesData ] = await Promise.all([
-          api.get(`/repos/${nomeRepo}`),
-          api.get(`/repos/${nomeRepo}/issues`, {
-              params:{
-                state: filters.find(f=> f.active).state,
-                per_page: 5
-              }
-          })
-       ]);
-        setRepositorio(repositorioData.data);
-        setIssues(issuesData.data);
-        setLoading(false);
-     }
-     load();
-
-},[match.params.repositorio]); 
- 
-useEffect(()=>{
-
-  async function loadIsssue(){
-    const nomeRepo = decodeURIComponent(match.params.repositorio);
-
-    const response =  await api.get(`/repos/${nomeRepo}/issues`, {
-      params:{
-        state: filters[filterIndex].state,
-        page,
-        per_page:5,
-      },
-    });
-
-    setIssues(response.data);
-
-  }
-  
-  loadIsssue();
-
-},[filterIndex,filters,match.params.repositorio,page]);
+  //salvar alteração
+  useEffect(()=>{
+    localStorage.setItem('repos' , JSON.stringify(repositorios));
+  },[repositorios]);
 
 
-function handleFilter(index){
-   setFilterIndex(index);
-
+function handleinputChange(event){
+  setNewRepo(event.target.value);
+  setAlert(null);
 }
 
-
-  if(loading){
-    return(
-      <Loading>
-        <h1>Carregando...</h1>
-      </Loading>
-    )
-  }
+const handleDelete = useCallback((repo)=>{
+    const find = repositorios.filter( r=> r.name !== repo);
+    setRepositorios(find);
+}, [repositorios]);
 
 
+const handleSubmit= useCallback((event)=>{
+    event.preventDefault();
+
+  async function submit(){
+
+    setLoading(true);
+    setAlert(null);
+    try{
+
+        if(newRepo === ''){
+          throw new Error ('Digite um nome valido para busca no repositorio!');
+        }
 
 
-function handlePage(action){
-    setPage(action === 'back' ? page - 1 : page + 1 )
- }
+        //'https://api.github.com/repos/facebook/react
+      const response =  await api.get(`repos/${newRepo}`);
 
+      const hasRepo = repositorios.find(repo => repo.name === newRepo);
+        
+      if(hasRepo){
+        throw new Error('Repositorio ja esta na Lista!');
+      }
+      const data = {
+        name: response.data.full_name,
+      }
+        setRepositorios([...repositorios, data]);
+        setNewRepo('');
+      }
+      catch(error)
+      {
+          setAlert(true);
+          console.log(error);
+      }
+      finally
+      {
+          setLoading(false);
+      }
+
+    }
+    
+   submit();
+   
+      
+}, [newRepo, repositorios]);
+
+/*async  function handleSubmit(event){
+  event.preventDefault();
+
+  const response =  await api.get(`repos/${newRepo}`);
+
+    const data = {
+       name: response.data.full_name,
+    }
+     setRepositorios([...repositorios, data]);
+     setNewRepo('');
+}
+*/
  return (
-        <Container>
-          <BackButton to="/">
-            <FaArrowLeft  color="#000" size={35}/>
-          </BackButton>
-              <Owner>
-                <img 
-                src={repositorio.owner.avatar_url}
-                alt={repositorio.owner.login}
-                />
-                <h1>{repositorio.name}</h1>
-                <p>{repositorio.description}</p>
-              </Owner>
+    <Container>
+        <h1>
+          <FaGithub size={26}/>
+          Meus Repositorios
+        </h1>
 
-              <FilterList active={filterIndex}>
-                  {filters.map((filter, index)=>(
-                      <button
-                        type="button"
-                        key={filter.label}
-                        onClick={()=>handleFilter(index)}
-                      >
-                        {filter.label}
-                      </button>
-                  ))}
-              </FilterList>
+        <Form onSubmit={handleSubmit} error={alert}>
+          <input  
+          type="text" 
+          placeholder="Adicionar Repositorios" 
+          value={newRepo}
+          onChange={handleinputChange}
+          />
+        
+          <SubmitButton loading={loading ? 1 : 0}>
+                {loading ? (
+                    <FaSpinner color="#FFF" size={14}/>
+                 ):(
+                  <FaPlus  color="#FFF" size={15} />
+                 )}
+          </SubmitButton>
+        </Form>
 
-
-             <IssuesList>
-                {issues.map(issue =>(
-                  <li key={String(issue.id)}>
-                    <img  src={issue.user.avatar_url} alt={issue.user.login} />
-                    <div>
-                        <strong>
-                          <a href={issue.html_url}>{issue.title}</a>
-
-                          {issue.labels.map(label =>(
-                            <span key={String(label.id)}>{label.name}</span>
-                          ))}
-                        </strong>
-                            <p>{issue.user.login}</p>
-                    </div>
-
+        <List>
+             {repositorios.map(repo => (
+                  <li key={repo.name}>
+                    <span>
+                      <DeleteButton onClick={()=>handleDelete(repo.name)}>
+                        <FaTrash size={14}/>
+                      </DeleteButton>
+                      {repo.name}</span>
+                    <Link to={`/repositorio/${encodeURIComponent(repo.name)}`}>
+                    <FaBars size={20}/>
+                    </Link>
                   </li>
-                ))}  
-             </IssuesList> 
-             <PageActions>
-               <button type="button" onClick={()=>handlePage('back')} disabled={page < 2}>
-                 Voltar
-                </button>
-               <button type="button" onClick={()=>handlePage('next')}>
-                 Proxima
-               </button>
-             </PageActions>
-
-        </Container>
+             ))}
+        </List>
+      
+    </Container>
   )
 }
